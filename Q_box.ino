@@ -16,8 +16,6 @@ const int relayPin3 = 10;  // Connect the signal pin of relay 3 to digital pin 4
 const int relayPin4 = 11;
 const int sensorPin1 = A0;
 const int sensorPin2 = A1;
-int sensorReading1 = 0;
-int sensorReading2 = 0;
 const int numReadings = 5; // Number of readings to use for the moving average
 int readings1[numReadings];  // Array to store the last 10 readings for sensor 1
 int readings2[numReadings];  // Array to store the last 10 readings for sensor 2
@@ -29,13 +27,14 @@ bool flag = true;
 bool flag2 = true;
 bool flag_m1 = false;
 unsigned long lastSensorCheckTime = 0;            // Variable to store the last time sensor check was performed
-const unsigned long sensorCheckInterval = 500;  // Interval in milliseconds
-const String version = "v2.0";
+const unsigned long sensorCheckInterval = 1000;  // Interval in milliseconds
+const String version = "v2.1";
 
-const char* ssid = "MatrixSMR100_05LPM086";
-const char* password = "smrIST#20";
-const char* mqtt_server = "192.168.1.103";
-//IPAddress ip(172, 30, 39, 64);
+const char* ssid = "RQ-1";
+const char* password = "12345678";
+const char* mqtt_server = "10.42.0.1";
+
+IPAddress ip(172, 30, 39, 62);
 //IPAddress gateway(172, 30, 36, 15);  // Replace with your gateway IP address
 //IPAddress subnet(255, 255, 252, 0); // Replace with your subnet mask
 
@@ -51,6 +50,8 @@ String data1 = "Pxi";
 String data2 = "Pxi";
 String mode = "1";
 String n_data = "";
+String strAverageReading1_ = "0";
+String strAverageReading2_ = "0";
 
 bool Sensor1_ststus = false;
 bool Sensor2_ststus = true;
@@ -68,7 +69,7 @@ void setup_wifi() {
     delay(500);
     //    Serial.println("Connecting to WiFi...");
     lcd.setCursor(0, 0);
-    lcd.print("Connecting to WiFi...");
+    lcd.print("Connecting WiFi...");
     count_connect_wifi += 1;
     if (count_connect_wifi >= 20) {
       lcd.clear();
@@ -109,7 +110,7 @@ void reconnect() {
     } else {
       digitalWrite(relayPin1, LOW);
       digitalWrite(relayPin3, HIGH);
-      delay(5000);
+      delay(1000);
     }
   }
 }
@@ -523,8 +524,12 @@ void updateMenu2() {
 }
 
 void CheckSensor() {
-  sensorReading1 = analogRead(sensorPin1);
-  sensorReading2 = analogRead(sensorPin2);
+  int sensorReading1 = analogRead(sensorPin1);
+  int sensorReading2 = analogRead(sensorPin2);
+
+  Serial.print(sensorReading1);
+  Serial.print(",");
+  Serial.println(sensorReading2);
 
   // Store the readings in the circular buffers
   readings1[index1] = sensorReading1;
@@ -540,29 +545,40 @@ void CheckSensor() {
   }
   int averageReading1 = total1 / numReadings;
   int averageReading2 = total2 / numReadings;
-  if (averageReading1 >= 5) {
+  if (averageReading1 > 0) {
     averageReading1 = 1;
   } else {
     averageReading1 = 0;
   }
-  if (averageReading2 >= 5) {
+  if (averageReading2 > 0) {
     averageReading2 = 1;
   } else {
     averageReading2 = 0;
   }
+  
   String strAverageReading1 = String(averageReading1);
   String strAverageReading2 = String(averageReading2);
 
   if (mode == "1") {
-    client.publish(mqtt_sensor1_topic.c_str(), strAverageReading1.c_str());
-    client.publish(mqtt_sensor2_topic.c_str(), strAverageReading2.c_str());
-    Serial.print(strAverageReading1.c_str());
-    Serial.print(" , ");
-    Serial.println(strAverageReading2.c_str());
+    if (strAverageReading1_ != strAverageReading1){
+      client.publish(mqtt_sensor1_topic.c_str(), strAverageReading1.c_str());
+    }
+    if (strAverageReading2_ != strAverageReading2){
+      client.publish(mqtt_sensor2_topic.c_str(), strAverageReading2.c_str());
+    }
+
+    // Serial.print(strAverageReading1.c_str());
+    // Serial.print(" , ");
+    // Serial.println(strAverageReading2.c_str());
+
   } else if (mode == "2") {
-    client.publish(mqtt_sensor1_topic.c_str(), strAverageReading1.c_str());
-    Serial.println(strAverageReading1.c_str());
+    if (strAverageReading1_ != strAverageReading1){
+      client.publish(mqtt_sensor1_topic.c_str(), strAverageReading1.c_str());
+      // Serial.println(strAverageReading1.c_str());
+    }
   }
+  strAverageReading1_ = strAverageReading1;
+  strAverageReading2_ = strAverageReading2;
 
 
 }
@@ -620,7 +636,7 @@ void blinkYELLOW() {
 }
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   button0.begin();
   button1.begin();
@@ -639,7 +655,7 @@ void setup() {
 
 //  WiFi.config(ip);
   setup_wifi();
-  client.setServer(mqtt_server, 1884);
+  client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
 
   // Read the data from EEPROM during setup
@@ -673,7 +689,7 @@ void loop() {
   if (millis() - lastSensorCheckTime >= sensorCheckInterval) {
     CheckSensor();
     lastSensorCheckTime = millis();
-    client.publish(("status" + mqtt_bt_topic).c_str(), "true");
+    // client.publish(("status" + mqtt_bt_topic).c_str(), "true");
   }
 
   if (button0.pressed()) {
