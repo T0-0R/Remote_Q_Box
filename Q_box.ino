@@ -18,7 +18,6 @@ int status = WL_IDLE_STATUS;
 WiFiServer server(80);
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 int currentAlphabet = 48;
-int count_connect_wifi = 0;
 unsigned long Bt3_Time_press;
 const int relayPin1 = 8;   // Connect the signal pin of relay 1 to digital pin 2
 const int relayPin2 = 9;   // Connect the signal pin of relay 2 to digital pin 3
@@ -38,7 +37,6 @@ bool flag2 = true;
 bool flag_m1 = false;
 bool status_wifi = false;
 bool status_mqtt = false;
-bool mqtt_status = false;
 unsigned long lastSensorCheckTime = 0;          // Variable to store the last time sensor check was performed
 const unsigned long sensorCheckInterval = 500;  // Interval in milliseconds
 const String version = "v3";
@@ -87,11 +85,6 @@ void setup() {
 
   lcd.init();
   lcd.backlight();
-
-  // WiFi.config(ip);
-  // setup_wifi();
-  // client.setServer(mqtt_server, 1884);
-  // client.setCallback(callback);
 
   // Read the data from EEPROM during setup
   readDataFromEEPROM(input_ssid, 0);
@@ -570,14 +563,15 @@ void action5() {
       client.println("<form method='get'>");
       client.println("<label for='ssid'>SSID:</label><br>");
       client.println("<input type='text' name='ssid' placeholder='Enter SSID'><br>");
-      client.println("<label for='password'>Password:</label><br>");
+      // client.println("<label for='password'>Password: (If you want to enter! Use *factorial)<br>");
+      client.println("<label for='password'>Password: <span style='color: red;'>(If you want to enter '!' Use '*factorial')</span><br>");
       client.println("<input type='password' name='pass' placeholder='Enter Password'><br>");
       client.println("<label for='mqtt_server'>MQTT Server:</label><br>");
       client.println("<input type='text' name='mqtt_server' placeholder='Enter MQTT Server Address'><br>");
       client.println("<input type='submit' value='Submit'>");
       client.println("</form>");
       client.println("</body></html>");
-
+      
       // Handle form submission action
       if (request.startsWith("GET /?")) {
         int paramsStartIndex = request.indexOf('?') + 1;
@@ -587,11 +581,13 @@ void action5() {
         // Split parameters at '&' symbol
         int separatorIndex1 = params.indexOf('&');
         ssid_input = urlDecode(params.substring(params.indexOf('=') + 1, separatorIndex1));
+        Serial.println(ssid_input);
 
         // Find the password parameter
         int passIndex = params.indexOf("pass=");
         if (passIndex != -1) {
           pass_input = urlDecode(params.substring(passIndex + 5));  // Skip "pass="
+          pass_input.replace("*factorial", "!"); // Replace *factorial with !
           // Trim the "pass=" prefix if present
           int passEndIndex = pass_input.indexOf('&');
           if (passEndIndex != -1) {
@@ -777,6 +773,7 @@ void printWiFiStatus() {
   Serial.println(ip);
 }
 
+
 String urlDecode(String input) {
   String decoded = "";
   char a, b;
@@ -784,7 +781,8 @@ String urlDecode(String input) {
     if (input[i] == '%') {
       a = input[++i];
       b = input[++i];
-      decoded += char(int(strtol(&a, NULL, 16)) * 16 + int(strtol(&b, NULL, 16)));
+      char decodedChar = char(int(strtol(&a, NULL, 16)) * 16 + int(strtol(&b, NULL, 16)));
+      decoded += decodedChar;
     } else if (input[i] == '+') {
       decoded += ' ';
     } else {
@@ -817,7 +815,7 @@ void setup_wifi(const char* SSID, const char* PASS) {
   Serial.println("Connecting to WiFi...");
   WiFi.begin(SSID, PASS);
   int attempts = 0;
-
+  
   while (WiFi.status() != WL_CONNECTED) {
     delay(250);  // Wait for connection
     Serial.print(".");
